@@ -1,28 +1,173 @@
-VB DevCheck GUI (Modern)
-=======================
+<div align="center">
 
-A modern-ish WinForms app (VB.NET) to check versions of common developer tools
-(Python, Node, Java, .NET, compilers, etc.) — based on your PowerShell HasV script.
+<!-- Animated Wave Header -->
+<img src="https://capsule-render.vercel.app/api?type=waving&height=210&color=0:6366f1,100:22c55e&text=DevCheck%20HasV&fontSize=56&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=Fast%20PowerShell%20Version%20Checker%20(Windows)&descAlignY=58" />
 
-Run (PowerShell)
-----------------
-1) Open PowerShell in the repo folder
-2) Run:
+<!-- Typing SVG -->
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=18&duration=2600&pause=650&color=22C55E&center=true&vCenter=true&width=860&lines=Check+PUNYA%2FTIDAK+PUNYA+%2B+Version;One-line+output+per+tool;Tcl+fixed+(no+interactive+hang)" />
 
-    dotnet restore
-    dotnet build
-    dotnet run --project .\src\DevCheckGui\DevCheckGui.vbproj
+<p>
+  <img src="https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white" />
+  <img src="https://img.shields.io/badge/PowerShell-5.1%2B%20%7C%207+-5391FE?logo=powershell&logoColor=white" />
+  <img src="https://img.shields.io/badge/Script-Portable-111827" />
+</p>
 
-Features
---------
-- One-click Scan (async + progress + cancel)
-- Search + filters (category / status)
-- Details panel (full stdout+stderr)
-- Export: TXT / JSON / CSV
-- Copy report to clipboard
-- Light/Dark theme toggle
+<p align="center">
+  🧰 <b>DevCheck HasV</b> adalah script PowerShell untuk mengecek <b>ketersediaan</b> dan <b>versi</b> berbagai bahasa pemrograman & toolchain di Windows.
+</p>
 
-Notes
------
-- This app checks tools from PATH (cmd-style). If a tool exists only as a PowerShell function/alias,
-  it may show as missing — which is typically what you want for “real” CLI availability.
+</div>
+
+---
+
+## Ringkasan
+
+Script ini menampilkan output seperti:
+
+- ✅ `PUNYA (version...)`
+- ❌ `TIDAK PUNYA`
+
+Setiap tool ditampilkan **1 baris**, jadi gampang dibaca dan cepat dicek.
+
+---
+
+## Kenapa script sebelumnya berhenti di Tcl?
+
+Di beberapa instalasi Windows, perintah seperti:
+
+- `tclsh --version`
+- `tclsh -c "..."`
+
+bisa **masuk mode interaktif** (`%`) dan membuat script **hang** (menunggu input).
+
+✅ Solusi yang stabil: ambil versi Tcl dengan **pipe**:
+
+```powershell
+'puts [info patchlevel]' | tclsh
+```
+
+Karena itu fungsi `HasV` dibuat punya **kasus khusus** untuk `tclsh`.
+
+---
+
+## Cara Pakai
+
+1) Copy script di bawah ke file misalnya: `devcheck.ps1`  
+2) Jalankan:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\devcheck.ps1
+```
+
+---
+
+## Script HasV (sudah fix Tcl)
+
+```powershell
+function HasV($name, $cmd, $verArgsText = "--version") {
+  if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+    "$name : TIDAK PUNYA"
+    return
+  }
+
+  # Kasus khusus: Tcl di Windows tertentu tidak cocok dengan --version / -c, jadi pakai pipe
+  if ($cmd -ieq "tclsh") {
+    try {
+      $out = 'puts [info patchlevel]' | & $cmd 2>&1
+      $line = ($out | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1).ToString().Trim()
+      if (-not $line) { $line = "-" }
+      "$name : PUNYA ($line)"
+    } catch {
+      "$name : PUNYA (-)"
+    }
+    return
+  }
+
+  # Default: jalankan lewat cmd supaya stderr tidak jadi error record di PowerShell
+  $out = cmd /c "$cmd $verArgsText 2>&1"
+
+  $line = ($out | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1).ToString().Trim()
+  if (-not $line) { $line = "-" }
+
+  "$name : PUNYA ($line)"
+}
+
+# General purpose
+HasV "Python" "python" "--version"
+HasV "Py launcher" "py" "--version"
+HasV "C (gcc)" "gcc" "--version"
+HasV "C++ (g++)" "g++" "--version"
+HasV "Java" "java" "-version"
+HasV ".NET" "dotnet" "--version"
+HasV "Go" "go" "version"
+HasV "Swift" "swift" "--version"
+HasV "Kotlin (kotlinc)" "kotlinc" "-version"
+HasV "Ruby" "ruby" "--version"
+HasV "Rust (rustc)" "rustc" "--version"
+
+# Web & JS
+HasV "Node.js" "node" "--version"
+HasV "V8 (JS engine)" "node" "-p ""process.versions.v8"""
+HasV "npm" "npm" "--version"
+HasV "npx" "npx" "--version"
+HasV "TypeScript (tsc)" "tsc" "--version"
+HasV "Vite (global)" "vite" "--version"
+HasV "Deno" "deno" "--version"
+HasV "Bun" "bun" "--version"
+
+# Data/Math/Science
+HasV "R" "R" "--version"
+HasV "Julia" "julia" "--version"
+HasV "SQLite" "sqlite3" "--version"
+
+# Functional & Academic
+HasV "Haskell (ghc)" "ghc" "--version"
+HasV "Scala" "scala" "--version"
+HasV "Clojure (clj)" "clj" "-Sdescribe"
+HasV "Elixir" "elixir" "--version"
+HasV "Erlang (erl)" "erl" "-version"
+HasV "OCaml (ocamlc)" "ocamlc" "-version"
+HasV "Scheme (Guile)" "guile" "--version"
+
+# Scripting/System
+HasV "Bash" "bash" "--version"
+HasV "PHP" "php" "--version"
+HasV "Lua" "lua" "-v"
+HasV "Tcl (tclsh)" "tclsh" "--version"
+HasV "Nim" "nim" "--version"
+HasV "Crystal" "crystal" "--version"
+
+# Assembler
+HasV "NASM" "nasm" "-v"
+```
+
+---
+
+## Tips: Menambah / Mengurangi Tool
+
+- Tambah baris baru:
+  - `HasV "Nama" "command" "--version"`
+- Kalau command versi berbeda:
+  - Java: `-version`
+  - Go: `version`
+  - NASM/Lua: `-v`
+- Kalau ada tool yang **lama** start-up (contoh: `R --version`), kamu bisa **comment** barisnya sementara.
+
+---
+
+## Troubleshooting
+
+### 1) Output versi “kosong” atau jadi “-”
+Beberapa tool menaruh versi di output yang berbeda atau butuh flag khusus. Coba ganti parameter versi pada baris `HasV`.
+
+### 2) Script terasa lama
+Biasanya karena ada tool yang start-up berat. Comment dulu tool tersebut, lalu jalankan lagi.
+
+### 3) Tcl masuk prompt `%`
+Pastikan kamu pakai script yang sudah ada **kasus khusus `tclsh`** (bagian pipe).
+
+---
+
+## License
+
+Gunakan bebas untuk kebutuhan pribadi/portofolio. Tambahkan file `LICENSE` jika ingin open-source (MIT/Apache-2.0).
