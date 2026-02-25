@@ -64,30 +64,89 @@ powershell -ExecutionPolicy Bypass -File .\devcheck.ps1
 ## Script HasV (sudah fix Tcl)
 
 ```powershell
+function First-NonEmptyLine($lines) {
+  foreach ($x in @($lines)) {
+    $s = [string]$x
+    if ($s -and $s.Trim()) { return $s.Trim() }
+  }
+  return $null
+}
+
 function HasV($name, $cmd, $verArgsText = "--version") {
-  if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
+  $gc = Get-Command $cmd -ErrorAction SilentlyContinue
+
+  # fallback khusus Tcl
+  if (-not $gc -and $cmd -ieq "tclsh") {
+    $gc = Get-Command tclsh86t -ErrorAction SilentlyContinue
+    if ($gc) { $cmd = "tclsh86t" }
+  }
+
+  if (-not $gc) {
     "$name : TIDAK PUNYA"
     return
   }
 
-  # Kasus khusus: Tcl di Windows tertentu tidak cocok dengan --version / -c, jadi pakai pipe
-  if ($cmd -ieq "tclsh") {
+  # ===== Kasus khusus Tcl =====
+  if ($cmd -ieq "tclsh" -or $cmd -ieq "tclsh86t") {
     try {
-      $out = 'puts [info patchlevel]' | & $cmd 2>&1
-      $line = ($out | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1).ToString().Trim()
-      if (-not $line) { $line = "-" }
-      "$name : PUNYA ($line)"
+      $exe = if ($gc.Source -and (Test-Path $gc.Source)) { $gc.Source } else { $cmd }
+
+      $tmp = Join-Path $env:TEMP "check_tcl_version.tcl"
+      Set-Content -LiteralPath $tmp -Value 'puts [info patchlevel]' -Encoding ASCII -NoNewline
+
+      $out = & $exe $tmp 2>&1
+      Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+
+      $line = First-NonEmptyLine $out
+      if ($line) {
+        "$name : PUNYA ($line)"
+      } else {
+        "$name : PUNYA (-)"
+      }
     } catch {
       "$name : PUNYA (-)"
     }
     return
   }
 
-  # Default: jalankan lewat cmd supaya stderr tidak jadi error record di PowerShell
-  $out = cmd /c "$cmd $verArgsText 2>&1"
+  # ===== Kasus khusus Clojure alias/function PowerShell =====
+  if ($cmd -ieq "clj") {
+    try {
+      $out = & $cmd --version 2>&1
+      $line = First-NonEmptyLine $out
 
-  $line = ($out | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1).ToString().Trim()
-  if (-not $line) { $line = "-" }
+      if (-not $line) {
+        $out = & $cmd -Sdescribe 2>&1
+        $line = First-NonEmptyLine $out
+      }
+
+      if ($line) {
+        "$name : PUNYA ($line)"
+      } else {
+        "$name : PUNYA (-)"
+      }
+    } catch {
+      "$name : TIDAK PUNYA"
+    }
+    return
+  }
+
+  # ===== Default =====
+  $out = cmd /c "$cmd $verArgsText 2>&1"
+  $line = First-NonEmptyLine $out
+
+  if (-not $line -or $line -match 'is not recognized as an internal or external command') {
+    "$name : TIDAK PUNYA"
+    return
+  }
+
+  # Ambil baris Elixir yang benar
+  if ($cmd -ieq "elixir") {
+    $elixirLine = @($out | ForEach-Object { [string]$_ } | Where-Object { $_ -match '^Elixir\s' } | Select-Object -First 1)
+    if ($elixirLine) {
+      $line = $elixirLine[0].Trim()
+    }
+  }
 
   "$name : PUNYA ($line)"
 }
